@@ -25,6 +25,7 @@ import {
   isSystemResponseInProgress,
   isSystemResponseComplete,
   isOAuthConsentMessage,
+  isObservabilityTraceMessage,
   extractOAuthUrl,
   shouldAppendResponseContent,
 } from '@/types/websocket';
@@ -535,7 +536,7 @@ export const Chat = () => {
       );
 
       return messages.map((m, idx) =>
-        idx === lastIdx ? updateAssistantMessage(m, m.content, mergedSteps, message.observability_trace_id) : m
+        idx === lastIdx ? updateAssistantMessage(m, m.content, mergedSteps) : m
       );
     }
   };
@@ -559,8 +560,8 @@ export const Chat = () => {
           ? {
               ...m,
               errorMessages: [...(m.errorMessages || []), message],
+              observabilityTraceId: m.observabilityTraceId,
               timestamp: Date.now(),
-              ...(message.observability_trace_id && { observabilityTraceId: message.observability_trace_id }),
             }
           : m
       );
@@ -578,6 +579,32 @@ export const Chat = () => {
         ),
       ];
     }
+  };
+
+  /**
+   * Processes observability trace messages by attaching trace ID to last assistant message
+   */
+  const processObservabilityTraceMessage = (
+    message: WebSocketInbound,
+    messages: Message[]
+  ): Message[] => {
+    if (!isObservabilityTraceMessage(message)) return messages;
+
+    const traceId = message.content?.observability_trace_id;
+    if (!traceId) {
+      return messages;
+    }
+
+    // Attach trace ID to last assistant message
+    return messages.map((m, idx) =>
+      idx === messages.length - 1
+        ? {
+            ...m,
+            observabilityTraceId: traceId,
+            timestamp: Date.now(),
+          }
+        : m
+    );
   };
 
   /**
@@ -691,6 +718,7 @@ export const Chat = () => {
     updatedMessages = processSystemResponseMessage(message, updatedMessages);
     updatedMessages = processIntermediateStepMessage(message, updatedMessages);
     updatedMessages = processErrorMessage(message, updatedMessages);
+    updatedMessages = processObservabilityTraceMessage(message, updatedMessages);
 
     // Update conversation with new messages and title using pure helper
     const updatedConversation = applyMessageUpdate(
@@ -1009,7 +1037,7 @@ export const Chat = () => {
                 partialIntermediateStep = '';
               }
 
-              // Process complete observability_trace_id tags (following intermediatestep pattern)
+              // Process complete observability_trace_id tags
               let observabilityTraceIdMatches =
                 chunkValue.match(
                   /<observabilitytraceid>([\s\S]*?)<\/observabilitytraceid>/g
