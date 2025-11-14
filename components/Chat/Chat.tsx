@@ -535,7 +535,7 @@ export const Chat = () => {
       );
 
       return messages.map((m, idx) =>
-        idx === lastIdx ? updateAssistantMessage(m, m.content, mergedSteps, message.weave_call_id) : m
+        idx === lastIdx ? updateAssistantMessage(m, m.content, mergedSteps, message.observability_trace_id) : m
       );
     }
   };
@@ -560,7 +560,7 @@ export const Chat = () => {
               ...m,
               errorMessages: [...(m.errorMessages || []), message],
               timestamp: Date.now(),
-              ...(message.weave_call_id && { weaveCallId: message.weave_call_id }),
+              ...(message.observability_trace_id && { observabilityTraceId: message.observability_trace_id }),
             }
           : m
       );
@@ -913,8 +913,8 @@ export const Chat = () => {
             return;
           }
           
-          // Extract Weave-Call-Id from response headers
-          const weaveCallId = response.headers.get('Weave-Call-Id') || undefined;
+          // Extract Observability-Trace-Id from response headers
+          const observabilityTraceId = response.headers.get('Observability-Trace-Id') || undefined;
           
           if (!false) {
             if (updatedConversation.messages.length === 1) {
@@ -942,7 +942,7 @@ export const Chat = () => {
             const isGenerateStream = selectedEndpoint.includes('/generate/stream');
             let sseBuffer = '';
             let ndjsonBuffer = '';
-            let extractedWeaveCallId: string | undefined = undefined;
+            let extractedObservabilityTraceId: string | undefined = undefined;
 
             while (!done) {
               const { value, done: doneReading } = await reader.read();
@@ -1009,29 +1009,29 @@ export const Chat = () => {
                 partialIntermediateStep = '';
               }
 
-              // Process complete weave_call_id tags (following intermediatestep pattern)
-              let weaveCallIdMatches =
+              // Process complete observability_trace_id tags (following intermediatestep pattern)
+              let observabilityTraceIdMatches =
                 chunkValue.match(
-                  /<weavecallid>([\s\S]*?)<\/weavecallid>/g
+                  /<observabilitytraceid>([\s\S]*?)<\/observabilitytraceid>/g
                 ) || [];
-              for (const match of weaveCallIdMatches) {
+              for (const match of observabilityTraceIdMatches) {
                 try {
                   const idString = match
-                    .replace('<weavecallid>', '')
-                    .replace('</weavecallid>', '')
+                    .replace('<observabilitytraceid>', '')
+                    .replace('</observabilitytraceid>', '')
                     .trim();
-                  if (idString && !extractedWeaveCallId) {
-                    extractedWeaveCallId = idString;
+                  if (idString && !extractedObservabilityTraceId) {
+                    extractedObservabilityTraceId = idString;
                   }
                 } catch (error) {
                   // Ignore parse errors
                 }
               }
 
-              // if the received chunk contains weaveCallId then remove them from the chunkValue
-              if (weaveCallIdMatches.length > 0) {
+              // if the received chunk contains observabilityTraceId then remove them from the chunkValue
+              if (observabilityTraceIdMatches.length > 0) {
                 chunkValue = chunkValue.replace(
-                  /<weavecallid>[\s\S]*?<\/weavecallid>/g,
+                  /<observabilitytraceid>[\s\S]*?<\/observabilitytraceid>/g,
                   ''
                 );
               }
@@ -1107,7 +1107,7 @@ export const Chat = () => {
                     role: 'assistant',
                     content: text, // main response content without intermediate steps
                     intermediateSteps: [...processedIntermediateSteps], // intermediate steps
-                    weaveCallId: extractedWeaveCallId || weaveCallId, // Weave Call ID from stream or headers
+                    observabilityTraceId: extractedObservabilityTraceId || observabilityTraceId, // Weave Call ID from stream or headers
                   },
                 ];
 
@@ -1147,7 +1147,7 @@ export const Chat = () => {
                         ...message,
                         content: text, // main response content
                         intermediateSteps: updatedIntermediateSteps, // intermediate steps
-                        weaveCallId: extractedWeaveCallId || weaveCallId, // Weave Call ID from stream or headers
+                        observabilityTraceId: extractedObservabilityTraceId || observabilityTraceId, // Weave Call ID from stream or headers
                       };
                       return msg;
                     }
@@ -1190,7 +1190,7 @@ export const Chat = () => {
             const { answer } = await response?.json();
             const updatedMessages: Message[] = [
               ...updatedConversation.messages,
-              { role: 'assistant', content: answer, weaveCallId },
+              { role: 'assistant', content: answer, observabilityTraceId },
             ];
             updatedConversation = {
               ...updatedConversation,
